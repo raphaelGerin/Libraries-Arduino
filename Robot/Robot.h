@@ -45,8 +45,10 @@ public :
     void sensMoteurPince(int sens);
     bool serrerPince();
     bool desserrerPince();
+    void arreterPince();
     bool obstaclePince();
     void ignoreCapteurPince();
+    bool attrapperPalet();
 
 private :
     DCMotor* m_roueGauche;
@@ -66,11 +68,11 @@ private :
     byte pinIN1Pince = 42;
     byte pinIN2Pince = 40;
     byte pinCapteurPince = 15;
-    int m_seuilBlocagePinceBas = 80;
+    int m_seuilBlocagePinceBas = 110;
     int m_seuilBlocagePinceHaut = 400;
+    unsigned int tempsDemarrageMoteur = 70;
     bool m_fermetureBloquee = false;
     bool m_ouvertureBloquee = false;
-    unsigned int tempsDemarrageMoteur = 70;
     unsigned long debutOuverturePince = 0;
     unsigned long debutFermeturePince = 0;
 
@@ -110,8 +112,8 @@ private :
 
     double m_consigneAngleSvrPt; // consigne pour le correcteur PID en angle d'avancerTourner
     double m_vitesseRotationSvrPt; // sortie du PID pour régler l'angle absolu du robot
-    float m_KpSvrPt = 0.025;
-    float m_KiSvrPt = 0.005;
+    float m_KpSvrPt = 0.25;
+    float m_KiSvrPt = 0.25;
     float m_KdSvrPt = 0;
     bool m_angleComputedSvrPt;
     bool m_modeSvrPt;
@@ -119,8 +121,8 @@ private :
     double m_consigneDistance = 0; //consigne pour le PID en distance
     double m_distance;   // entrée du PID
     double m_vitesseMoyenne; // sotie du PID
-    float m_Kpd = 0.6;
-    float m_Kid = 0.15;
+    float m_Kpd = 0.2;
+    float m_Kid = 0.2;
     float m_Kdd = 0;
     bool m_angleComputed;
 
