@@ -20,9 +20,12 @@ modulo180		KEYWORD2
 debug			KEYWORD2
 
 jeuLeds			KEYWORD2
-intiLeds		KEYWORD2
+initLeds		KEYWORD2
+initLedsNB		KEYWORD2
 allumerLeds		KEYWORD2
 eteindreLeds		KEYWORD2
+allumerLedEtape		KEYWORD2
+eteindreLedEtape	KEYWORD2
 
 tirageTirette		KEYWORD2
 reglagePinceManuel	KEYWORD2
@@ -32,4 +35,4 @@ desserrerPince		KEYWORD2
 obstaclePince		KEYWORD2
 ignoreCapteurPince	KEYWORD2
 arreterPince		KEYWORD2
-attrapperPalet		KEYWORD2
+attraperPalet		KEYWORD2
