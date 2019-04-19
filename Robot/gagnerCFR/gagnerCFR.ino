@@ -17,9 +17,8 @@ byte ledEtape3 = 37;
 byte ledEtape4 = 38;
 
 
-int etape =-1;
+int etape =1;
 byte compteur =0;
-
 byte etapeBis = 0;
 byte compteurBis = 0;
 
@@ -39,7 +38,7 @@ Robot monRobot = Robot(&moteurGauche,&moteurDroit, 207.5/2, 40); //roue gauche, 
 
 void setup() 
 { 
-  monRobot.allumerLeds();
+  monRobot.initLedsNB();
   TCCR3B = TCCR3B & 0b11111000 | 0x01;  //permet d'augmenter la fréquence du pwm des pins 5,3 et 2 au maximum (31 250Hz)
   TCCR4B = TCCR4B & 0b11111000 | 0x01;  //permet d'augmenter la fréquence du pwm des pins 8,7 et 6 au maximum (31 250Hz)
   
@@ -56,9 +55,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(codeurDroite1), motorCodeurIncrementalDA, CHANGE);
   attachInterrupt(digitalPinToInterrupt(codeurDroite2), motorCodeurIncrementalDB, CHANGE);
 
-  monRobot.setPosition(75,600,0);
-  monRobot.eteindreLeds();
-  
+  monRobot.initCote();
   while(!monRobot.initLedsNB())
   {
     monRobot.reglagePinceManuel();
@@ -121,14 +118,14 @@ void loop()
   
   //monRobot.debug();
 
-  /* 
-  Serial.print("etape : ");
+   
+  Serial.print("#");
   Serial.print(etape);
-  Serial.print("\t");
-  Serial.print("etapeBis : ");
+  Serial.print(" ");
   Serial.print(etapeBis);
-  //Serial.println();
-  
+  Serial.print("\t");
+  Serial.println();
+  /*
   Serial.print("\tcompteurBis : ");
   Serial.println(compteurBis);
   */
@@ -199,8 +196,7 @@ bool deverrouillerGoldenium()
         monRobot.eteindreLedEtape(etapeBis);
         compteurBis=0;
         etapeBis=0;
-        etape++; //on passe à l'action suivante eheheh B) :D 
-        return true ;
+        return true ; //on passe à l'action suivante eheheh B) :D 
       }
     break;
     default :
@@ -215,21 +211,21 @@ bool recupererGoldonium()
 {
   switch (etapeBis)
     { 
-    case 1 :
+    case 0 :
       if(monRobot.suivrePoint(1635,400,10))
       {
         monRobot.eteindreLedEtape(etapeBis);
         etapeBis++;
       }
       break;
-    case 2 :
+    case 1 :
       if(monRobot.tournerPrecis(5,5)){
         monRobot.eteindreLedEtape(etapeBis);
         etapeBis++;
       }
     break;
     
-    case 3 :
+    case 2 :
       if(monRobot.suivrePoint(2224,600,5))
       {
         monRobot.eteindreLedEtape(etapeBis);
@@ -247,7 +243,7 @@ bool recupererGoldonium()
       }
       break;
 
-    case 4 :
+    case 3 :
       if(monRobot.tournerPrecis(-90,1)){
         compteurBis++;
       }
@@ -262,7 +258,7 @@ bool recupererGoldonium()
       }
     break;
     
-    case 5 :
+    case 4 :
       if(monRobot.suivrePoint(2224,180,3)){
         compteurBis++;
       }
@@ -276,14 +272,14 @@ bool recupererGoldonium()
       }
     break;
 
-    case 6 :
+    case 5 :
       if(monRobot.attraperPalet()){
         monRobot.eteindreLedEtape(etapeBis);
         etapeBis++;
       }
     break;
 
-    case 7 :
+    case 6 :
       if(monRobot.suivrePoint(2224,300,10)){
         compteurBis++;
       }
@@ -297,12 +293,11 @@ bool recupererGoldonium()
       }
     break;
 
-    case 8 :
+    case 7 :
       if(monRobot.tournerPrecis(135,5)){
         monRobot.eteindreLedEtape(etapeBis);
         etapeBis=0;
-        etape++; //on passe à l'action suivante eheheh B) :D 
-        return true ;
+        return true ;//on passe à l'action suivante eheheh B) :D 
       }
     break;
 
@@ -373,8 +368,7 @@ bool mettreGoldoniumDansBalance()
       {
         monRobot.eteindreLedEtape(etapeBis);
         etapeBis=0;
-        etape++; //on passe à l'action suivante eheheh B) :D 
-        return true ;
+        return true ; //on passe à l'action suivante eheheh B) :D 
       }
     break;
     default :
@@ -382,7 +376,7 @@ bool mettreGoldoniumDansBalance()
       digitalWrite(ledJaune,HIGH);
       monRobot.reglagePinceManuel();
     }
-  return false;et 
+  return false;
 
 }
 
