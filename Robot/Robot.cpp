@@ -8,7 +8,9 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
 //    Serial.print("battery level : ");
 //    Serial.println(Robot::getBattery()/10);
     m_roueGauche = roueGauche;
+    m_roueGauche->setPeriode(m_periode);
     m_roueDroite = roueDroite;
+    m_roueDroite->setPeriode(m_periode);
     m_empattement = empattement;
     m_rayon = rayonRoues;
     m_angle = 0;                        // Sotck l'angle du robot au cours du temps, il va quand mÃªme rester Ã  dÃ©finir un cotÃ© + et un -
@@ -20,6 +22,8 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
 
     pinMode(pinDemarrageOutput,OUTPUT);
     pinMode(pinDemarrageInput,INPUT_PULLUP);
+    pinMode(pinChoixCote, INPUT_PULLUP);
+    pinMode(pinOutputCote, OUTPUT);
 
     pinMode(pinInterrupteurPince,OUTPUT);
     pinMode(pinOuverturePince,INPUT_PULLUP);
@@ -56,43 +60,87 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
 void Robot::debug()
 {
     if (!Serial.available()) Serial.begin(1000000);
-    //Serial.print("temps\t");
-    Serial.print(millis());
-    Serial.print("\tX\t");
-    Serial.print(m_posX);
 
-    Serial.print("\tY\t");
-    Serial.print(m_posY);
-    Serial.print("\t°\t");
-    Serial.print(m_angle);
+    if (m_debugMode==1)
+    {
+        Serial.print("t\t");
+        Serial.print(float(millis()-tInit)/1000);
+        Serial.print("\tX\t");
+        Serial.print(m_posX);
 
+        Serial.print("\tY\t");
+        Serial.print(m_posY);
+        Serial.print("\tangle\t");
+        Serial.print(m_angle);
 
-    Serial.print("\t\tC_rot°\t");
-    Serial.print(m_vitesseRotationSvrPt*m_modeSvrPt+m_vitesseRotation*(!m_modeSvrPt));
-    Serial.print("\tC_vit\t");
-    Serial.print(m_vitesseMoyenne);
-    Serial.print("\tC_angle\t");
-    Serial.print(m_consigneAngleSvrPt*m_modeSvrPt+m_consigneAngle*(!m_modeSvrPt));
-    Serial.print("\td\t");
-    Serial.print(m_distance);
-    Serial.print("\t#\t");
-    Serial.print(m_etape);
+        Serial.print("\t\tC_rot°\t");
+        Serial.print(m_vitesseRotationSvrPt*m_modeSvrPt+m_vitesseRotation*(!m_modeSvrPt));
+        Serial.print("\tC_vit\t");
+        Serial.print(m_vitesseMoyenne);
+        Serial.print("\tC_angle\t");
+        Serial.print(m_consigneAngleSvrPt*m_modeSvrPt+m_consigneAngle*(!m_modeSvrPt));
+        Serial.print("\td\t");
+        Serial.print(m_distance);
+        Serial.print("\t étape\t");
+        Serial.print(m_etape);
 /*
-    Serial.print("\t");
-    Serial.print(m_angleComputedSvrPt);
-    Serial.print(m_angleComputedSvrPt);
-*/    Serial.print("\tvmot\t");
-    Serial.print(m_vg);
-    Serial.print("\t");
-    Serial.print(m_vd);
+        Serial.print("\t");
+        Serial.print(m_angleComputedSvrPt);
+        Serial.print(m_angleComputedSvrPt);
+       Serial.print("\tvMotG\t");
+        Serial.print(m_vg);
+        Serial.print("\tvMotD\t");
+        Serial.print(m_vd);
+        */
+    }
+    else if (m_debugMode == 2)
+    {
+        Serial.print("t\tangle\tC_rot\tvMotG\tvMotD");
+        //Serial.print("t\tX\tY\tangle\tC_rot\tC_vit\tC_angle\td\tvMotG\tvMotD");
+        m_debugMode++;
+    }
+    else if(m_debugMode ==3)
+    {
+
+        Serial.print(float(millis()-tInit)/1000);
+        Serial.print("\t");
+        /*
+        Serial.print(m_posX);
+        Serial.print("\t");
+        Serial.print(m_posY);
+        Serial.print("\t");
+        */
+        Serial.print(m_angle);
+        Serial.print("\t");
+        Serial.print(m_vitesseRotationSvrPt*m_modeSvrPt+m_vitesseRotation*(!m_modeSvrPt));
+        Serial.print("\t");
+        /*
+        Serial.print(m_vitesseMoyenne);
+        Serial.print("\t");
+        Serial.print(m_consigneAngleSvrPt*m_modeSvrPt+m_consigneAngle*(!m_modeSvrPt));
+        Serial.print("\t");
+        Serial.print(m_distance);
+        Serial.print("\t");
+        */
+        Serial.print(m_roueGauche->getVitesse());
+        Serial.print("\t");
+        Serial.print(m_roueDroite->getVitesse());
+    }
 
     Serial.println();
 }
 
+void Robot::setDebugMode(byte mode)
+{
+    m_debugMode = mode;
+    if (mode ==2) debug();
+}
+
 void Robot::initCote()
 {
+    digitalWrite(pinOutputCote,LOW);
     if(digitalRead(pinChoixCote))
-    {//coté jaune-orange
+    {//coté jaune
         setPosition(150,600,0);//X, Y, angle abs
         setCoordonneesBluenium(1635 , 270 , -90); //X, Y, angle abs
         setCoordonneesGoldenium(2224 , 180 , -90);
@@ -421,7 +469,7 @@ void Robot::allerRetour(float x, float y)
     switch (m_etape)
     {
     case 0 :
-        if (Robot::suivrePoint(x,y,5))
+        if (Robot::suivrePoint(xInit+x,yInit+y,5))
         {
             m_compteur++;
             digitalWrite(ledEtape1,HIGH);
@@ -606,7 +654,7 @@ bool Robot::suivrePoint(float xCible, float yCible, float precision)
   if (abs(m_distance) >= precision) //vérifier que abs fonctionne tout le temps avec un float !
   {
       digitalWrite(ledEtapeFinie, LOW);
-      Robot::avancerTourner(int(m_vitesseMoyenne / (1 + abs(m_vitesseRotationSvrPt)*m_rapportAvancerTourner)), -m_vitesseRotationSvrPt);
+      Robot::avancerTourner((m_vitesseMoyenne / (1 + abs(m_vitesseRotationSvrPt)*m_rapportAvancerTourner)), -m_vitesseRotationSvrPt);
       return false;
   }
   else
@@ -618,10 +666,10 @@ bool Robot::suivrePoint(float xCible, float yCible, float precision)
 }
 
 
-void Robot::avancerTourner(int v, int theta)
+void Robot::avancerTourner(float v, float theta)
 {
-  theta = constrain(theta, -128, 127);
-  v = constrain(v, -128 + abs(theta), 127 - abs(theta));
+  theta = constrain(theta, -150, 150);
+  v = constrain(v, -150 + abs(theta), 150 - abs(theta));
   //#if PONT_EN_H
   avancer(v-theta,v+theta);
   //#endif
@@ -640,7 +688,7 @@ void Robot::avancerTourner(int v, int theta)
   */
 }
 
-void Robot::avancer(int vg, int vd)
+void Robot::avancer(float vg, float vd)
 {
     if (m_vg*vg<0) m_vg =0;
     else if (abs(m_vg)<abs(vg)) m_vg = constrain(vg,m_vg-m_acc,m_vg+m_acc);
@@ -761,4 +809,19 @@ void Robot::setCoordonneesBalance(float x, float y, float angle)
     coordonneesBalance[0]=x;
     coordonneesBalance[1]=y;
     coordonneesBalance[2]=angle;
+}
+
+void Robot::setPeriode(byte periode)
+{
+    m_periode = periode;
+}
+
+void Robot::setAcceleration(float acc)
+{
+    m_acc =acc;
+}
+
+void Robot::initTime()
+{
+    tInit = millis();
 }
