@@ -28,7 +28,7 @@ private:
     //-----------------DONNEES MESURE VITESSE-------------------
     byte m_voieA;   //broche de la voie A du codeur incrémental associé au moteur
     byte m_voieB;   //broche de la voie B du codeur incrémental associé au moteur
-    unsigned long m_temps_absolu;
+    unsigned long m_temps_absolu =0;
     int m_periode = 5; //période d'acquisition en ms
     volatile long m_compteur=0;
     long m_precedentCompteur=0;

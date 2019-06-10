@@ -38,7 +38,7 @@ void DCMotor::tourneRPM(float consigne)
     Serial.print("\t");
     */
    // consigne = constrain(consigne,-1,165);    //le robot ne peut pas aller plus vite que ces valeurs
-    int diff = millis() - m_temps_absolu;
+    unsigned long diff = millis() - m_temps_absolu;
     if (diff > 3*m_periode)  m_temps_absolu = millis() - m_periode;
     if (diff >=m_periode)
     {

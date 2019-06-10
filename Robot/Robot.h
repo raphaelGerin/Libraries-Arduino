@@ -7,6 +7,8 @@
 #include "PS2MouseEgab.h"
 #include <PID_v1.h>
 
+#define BAUDRATE 1000000
+
 class Robot
 {
 public :
@@ -16,6 +18,7 @@ public :
     void avancerTourner(float v, float theta);          // vitesseMoyenne, vitesseRotation
     void avancer(float vg, float vd); //vitesse roue gauche, vitesse roue droite
     bool tournerPrecis(float theta, float precision);       // angle, precision
+    bool suivrePoint(float*, float precision);   //tableauCoordonnées, precision
     bool suivrePoint(float xCible, float yCible, float precision);   //x, y, precision
     void allerRetour(float x,float y); //x, y
     void actualiserPosition();
@@ -24,6 +27,9 @@ public :
     double getPosX();
     double getPosY();
     double getAngle();
+    float getVg();
+    float getVd();
+    void envoieDonneesLidar();
     void setAcceleration(float acc);
     void setAngleCorrecteur(float kp, float ki, float kd);       //P, I, D
     void setDistanceCorrecteur(float kp, float ki, float kd);    //P, I, D
@@ -31,11 +37,13 @@ public :
     void setIntegralSaturation(float sat);
     void setPeriode(byte periode);
 
-    float getRapportAvancerTourner();
     void setRapportAvancerTourner(float r);
-    float modulo180(float angle);
+    double modulo360(double angle);
     void debug();
     void setDebugMode(byte mode);
+
+    bool detectionRobotAdverse();
+    void setModeAveugle(bool);
 
     void jeuLeds();
     void initLeds();
@@ -46,9 +54,13 @@ public :
     void eteindreLedEtape(byte etape);
 
     void initCote();
+    void setCoordonneesEvitement(float x, float y, float angle);
     void setCoordonneesBluenium(float x, float y, float angle);
     void setCoordonneesGoldenium(float x, float y, float angle);
     void setCoordonneesBalance(float x, float y, float angle);
+    void setCoordonneesIntermediaireBluenium(float x, float y, float angle);
+    void setCoordonneesIntermediaireGoldenium(float x, float y, float angle);
+    void setCoordonneesIntermediaireBalance(float x, float y, float angle);
     bool tirageTirette();
     void initTime();
 
@@ -72,25 +84,30 @@ private :
     byte pinDemarrageInput = 52;
 
     //Variable positionnement terrain
-    byte pinChoixCote =43;
-    byte pinOutputCote = 41;
+    byte pinChoixCote =41;
+    byte pinOutputCote = 40;
+    float coordonneesEvitement[3];
     float coordonneesBluenium[3];
     float coordonneesGoldenium[3];
     float coordonneesBalance[3];
+    float coordonneesIntermediaireBluenium[3];
+    float coordonneesIntermediaireGoldenium[3];
+    float coordonneesIntermediaireBalance[3];
 
     //Variables PINCE
     byte pinOuverturePince = 45;
     byte pinSerragePince = 47;
     byte pinInterrupteurPince = 46;
     byte pinInputPince = 44;
-    byte pinIN1Pince = 42;
-    byte pinIN2Pince = 40;
+    byte pinIN1Pince = 43;
+    byte pinIN2Pince = 42;
     byte pinCapteurPince = 15;
-    int m_seuilBlocagePinceBas = 110;
-    int m_seuilBlocagePinceHaut = 400;
+    int m_seuilBlocagePinceBas = 200;
+    int m_seuilBlocagePinceHaut = 450;
     unsigned int tempsDemarrageMoteur = 70;
     bool m_fermetureBloquee = false;
     bool m_ouvertureBloquee = false;
+    bool m_pinceOuverture;
     unsigned long debutOuverturePince = 0;
     unsigned long debutFermeturePince = 0;
 
@@ -121,34 +138,37 @@ private :
     double m_encodeurPrecedentGauche;
     double m_encodeurPrecedentDroit;
 
+//---------------detection Robot Adverse-------------------
+    int m_distanceSeuilMin = 150;
+    int m_distanceSeuilMinCamera =300;
+    int d1,d2,d3;
+    bool m_aveugle;
 
     //Variables pour les correcteurs d'asservissement
-    byte m_periode = 5;
-    int m_lastTime =0;
+    int m_lastTime =0; //pour l'envoie des données au lidar
     unsigned long tInit=0;
+
 
     double m_consigneAngle; // consigne pour le correcteur PID en angle
     double m_vitesseRotation; // sortie du PID pour régler l'angle absolu du robot
     float m_Kp = 0.55;
     float m_Ki = 0.8;
     float m_Kd = 0;
-    bool m_distanceComputed;
 
     double m_consigneAngleSvrPt; // consigne pour le correcteur PID en angle d'avancerTourner
     double m_vitesseRotationSvrPt; // sortie du PID pour régler l'angle absolu du robot
     float m_KpSvrPt = 0.25;
     float m_KiSvrPt = 0.25;
     float m_KdSvrPt = 0;
-    bool m_angleComputedSvrPt;
     bool m_modeSvrPt;
 
     double m_consigneDistance = 0; //consigne pour le PID en distance
     double m_distance;   // entrée du PID
     double m_vitesseMoyenne; // sotie du PID
+    double m_vitesseMoyenneMax = 150;
     float m_Kpd = 20;
     float m_Kid = 0.2;
     float m_Kdd = 0;
-    bool m_angleComputed;
 
     //variables pour le maniement séquentiel du robot
     bool initLedsSetuped = false;
@@ -162,7 +182,7 @@ private :
     PID correctionAngle = PID(&m_angle, &m_vitesseRotation, &m_consigneAngle, m_Kp, m_Ki, m_Kd, true);
     PID correctionDistance = PID(&m_distance, &m_vitesseMoyenne, &m_consigneDistance, m_Kpd, m_Kid, m_Kdd, false);
     PID correctionAngleSvrPt = PID(&m_angle, &m_vitesseRotationSvrPt, &m_consigneAngleSvrPt, m_KpSvrPt, m_KiSvrPt, m_KdSvrPt, true);
-    float m_rapportAvancerTourner = 0*0.05;
+    float m_rapportAvancerTourner = 0;
 
 };
 #endif // ROBOT_H

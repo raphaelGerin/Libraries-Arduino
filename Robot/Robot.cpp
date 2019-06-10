@@ -4,7 +4,8 @@
 //Constructor :
 Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float rayonRoues) // : rajouter un héritage ...  float empattement = 127.5, float rayonRoues = 49.5)
 {
-    Serial.begin(1000000);
+    Serial.begin(BAUDRATE);
+    Serial2.begin(115200);
 //    Serial.print("battery level : ");
 //    Serial.println(Robot::getBattery()/10);
     m_roueGauche = roueGauche;
@@ -13,9 +14,7 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
     m_roueDroite->setPeriode(m_periode);
     m_empattement = empattement;
     m_rayon = rayonRoues;
-    m_angle = 0;                        // Sotck l'angle du robot au cours du temps, il va quand mÃªme rester Ã  dÃ©finir un cotÃ© + et un -
-    m_posX = 0; //
-    m_posY = 0; // =
+    setPosition(0,0,0);
     m_encodeurPrecedentGauche = m_roueGauche->getCodeur(); //normalement ils valent 0 au dÃ©but
     m_encodeurPrecedentDroit = m_roueDroite->getCodeur();
     Robot::setIntegralSaturation(2);
@@ -42,7 +41,7 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
 
 /*Robot::Robot(DCMotor *roueGauche, DCMotor *roueDroite, float empattement, float rayonRoues, PS2MouseEgab* sourisGache, PS2MouseEgab* sourisDroite, float angleInterSouris)
 {
-    Serial.begin(1000000);
+    Serial.begin(BAUDRATE);
     Serial.print("battery level : ");
 //    Serial.println(Robot::getBattery()/10);
     m_roueGauche = roueGauche;
@@ -59,13 +58,13 @@ Robot::Robot(DCMotor* roueGauche, DCMotor* roueDroite, float empattement, float 
 
 void Robot::debug()
 {
-    if (!Serial.available()) Serial.begin(1000000);
+    if (!Serial.available()) Serial.begin(BAUDRATE);
 
     if (m_debugMode==1)
     {
         Serial.print("t\t");
-        Serial.print(float(millis()-tInit)/1000);
-        Serial.print("\tX\t");
+        Serial.print(millis());
+        Serial.print("\t\tX\t");
         Serial.print(m_posX);
 
         Serial.print("\tY\t");
@@ -81,13 +80,11 @@ void Robot::debug()
         Serial.print(m_consigneAngleSvrPt*m_modeSvrPt+m_consigneAngle*(!m_modeSvrPt));
         Serial.print("\td\t");
         Serial.print(m_distance);
+        /*
         Serial.print("\t étape\t");
         Serial.print(m_etape);
-/*
         Serial.print("\t");
-        Serial.print(m_angleComputedSvrPt);
-        Serial.print(m_angleComputedSvrPt);
-       Serial.print("\tvMotG\t");
+        Serial.print("\tvMotG\t");
         Serial.print(m_vg);
         Serial.print("\tvMotD\t");
         Serial.print(m_vd);
@@ -102,7 +99,7 @@ void Robot::debug()
     else if(m_debugMode ==3)
     {
 
-        Serial.print(float(millis()-tInit)/1000);
+        Serial.print(millis());
         Serial.print("\t");
         /*
         Serial.print(m_posX);
@@ -130,31 +127,84 @@ void Robot::debug()
     Serial.println();
 }
 
+bool Robot::detectionRobotAdverse()
+{
+    int dMin;
+
+      if(m_vitesseMoyenne<0)
+      {//Premier cas : on recule, on regarde seulement la caméra de recul
+        int d = analogRead(8)*2.7+11; //calcul de la distance au robot adverse
+        if(d>1600){
+            d=30000;//si aucune balise n'est détectée on fixe la distance à 3m
+        }
+        else if(d<m_distanceSeuilMinCamera)//arrêt urgence
+        {
+            Serial.print("d_camera : ");
+            Serial.println(d);
+            m_vitesseMoyenneMax = 0;
+            avancer(0,0);
+            return true;
+        }
+        else
+        {
+            m_vitesseMoyenneMax = (d-m_distanceSeuilMinCamera+50)/3;// réduction de vitesse
+            return false;
+        }
+      }
+
+      else if( !m_aveugle) //Deuxième cas : on avance, on regarde seulement les US
+      {
+          if(Serial2.available()>2){
+        d1=10*Serial2.read();
+        d2=10*Serial2.read();
+        d3=10*Serial2.read();
+
+
+        dMin = min(d1,min(d2,d3));
+        if(dMin<m_distanceSeuilMin)
+        {
+            m_vitesseMoyenneMax = 0;
+            avancer(0,0);
+            return true;
+        }
+
+        else
+        {
+            m_vitesseMoyenneMax = (dMin-m_distanceSeuilMin+100)/3;
+            return false;
+        }
+          }
+      }
+  return false;
+}
+
+
 void Robot::setDebugMode(byte mode)
 {
     m_debugMode = mode;
     if (mode ==2) debug();
 }
 
-void Robot::initCote()
+void Robot::envoieDonneesLidar()
 {
-    digitalWrite(pinOutputCote,LOW);
-    if(digitalRead(pinChoixCote))
-    {//coté jaune
-        setPosition(150,600,0);//X, Y, angle abs
-        setCoordonneesBluenium(1635 , 270 , -90); //X, Y, angle abs
-        setCoordonneesGoldenium(2224 , 180 , -90);
-        setCoordonneesBalance(1300 , 1500 , 90);
+    if(millis()-m_lastTime>m_periode*3) m_lastTime = millis()-m_periode;
+    if(millis()-m_lastTime>=m_periode)
+    {
+        m_lastTime+=m_periode;
+        if (!Serial.available()) Serial.begin(BAUDRATE);
+        Serial.write(0x40);
+        //Serial.print(getVg());
+        Serial.print(m_posX);
+        Serial.write(0xA8);
+        //Serial.print(getVd());
+        Serial.print(m_posY);
+        Serial.write(0xB9);
+        Serial.print(m_angle);
+        Serial.write(0x0C);
     }
-    else
-    {//coté violet
-        setPosition(3000-150,600,180);
-        setCoordonneesBluenium(3000-1635 , 270 , -90); //X, Y, angle abs
-        setCoordonneesGoldenium(3000-2224 , 180 , -90);
-        setCoordonneesBalance(3000-1300 , 1500 , 90);
-    }
-
 }
+
+
 
 void Robot::allumerLedEtape(byte etape)
 {
@@ -251,11 +301,13 @@ void Robot::sensMoteurPince(int sens)
 {
   if (sens == 1) //sens qui serre la pince
   {
+    m_pinceOuverture = false;
     digitalWrite(pinIN1Pince, HIGH);
     digitalWrite(pinIN2Pince, LOW);
   }
   else if (sens == -1) //sens qui desserre la pince
   {
+    m_pinceOuverture = true;
     digitalWrite(pinIN1Pince, LOW);
     digitalWrite(pinIN2Pince, HIGH);
   }
@@ -282,7 +334,11 @@ bool Robot::obstaclePince()
     {
         seuil = m_seuilBlocagePinceHaut;
     }
-    else seuil = m_seuilBlocagePinceBas;
+    else
+    {
+        seuil = m_seuilBlocagePinceBas;
+        if(m_pinceOuverture) seuil-=100;
+    }
     if (m1+m2+m3>3*seuil) return true;
     else return false;
 }
@@ -563,55 +619,110 @@ bool Robot::tirageTirette()
 
 void Robot::actualiserPosition() // tourne Ã  une visteese x1 pour le moteur 1 et idem pour le 2 : x1 = GAUCHE
 {
-  //#ifdef CODEURS
-  double encodeurGauche = m_roueGauche->getCodeur();
-  double encodeurDroit = m_roueDroite->getCodeur();
-  int nbPasEncodeurGauche = encodeurGauche - m_encodeurPrecedentGauche;
-  int nbPasEncodeurDroit = encodeurDroit - m_encodeurPrecedentDroit;
-  m_encodeurPrecedentGauche = encodeurGauche;
-  m_encodeurPrecedentDroit = encodeurDroit;
+  /*
+  if(Serial.available()>=7)
+  {//Reception des données sur lidar
+      double x,y,angle;
 
-  //Pour évite les gros bugs non physiques
-  if (abs(nbPasEncodeurGauche) + abs(nbPasEncodeurDroit) < 3000)
+      if (Serial.read()==0x40)
+      {
+          char temp[9];
+          byte i =0;
+          temp[i]=Serial.read();
+          while (temp[i] != 0xA8 and i<8)
+          { //ATTENTION SI ON ENVOIE PLUS DE 9 CHAR
+              i++;
+              temp[i]=Serial.read();
+          }
+          x = String(temp).toDouble();
+
+          i =0;
+          temp[i]=Serial.read();
+          while (temp[i] != 0xB9 and i<8)
+          { //ATTENTION SI ON ENVOIE PLUS DE 9 CHAR
+              temp[i]=Serial.read();
+              i++;
+          }
+          y = String(temp).toDouble();
+
+          i =0;
+          temp[i]=Serial.read();
+          while (temp[i] != 0x0C and i<8)
+          { //ATTENTION SI ON ENVOIE PLUS DE 9 CHAR
+              temp[i]=Serial.read();
+              i++;
+          }
+          angle = String(temp).toDouble();
+      }
+      else
+      {
+          Serial.begin(BAUDRATE);
+          Serial.println("Erreur de reception, pas de bit de start");
+      }
+      //Vérifier ici si les résultats ne sont pas absurdes.
+      if(abs(getPosX()-x)>10 or abs(getPosY()-y)>10 or abs(getAngle()-angle)>0.1)
+      {
+          Serial.print("lidar x : ");
+          Serial.print(x);
+          Serial.print("\ty ");
+          Serial.print(y);
+          Serial.print("\tangle ");
+          Serial.println(angle);
+          setPosition(x,y,angle);
+      }
+  }
+  else
   {
-    //dans un intervalle de temps :
-    double distance_parcourue_roue_gauche = nbPasEncodeurGauche * 2 * PI * m_rayon / m_roueGauche->getReducteur(); //il faut surement rajouter le rapport de rÃ©duction du moteur                       // ici on calcule la distance parcourue. Pour cela, on estime que le temps d'exÃ©cution de l'algo est faible, et le seul facteur limitant est
-    double distance_parcourue_roue_droite = nbPasEncodeurDroit * 2 * PI * m_rayon / m_roueDroite->getReducteur();
-    double distance_parcourue = (distance_parcourue_roue_gauche + distance_parcourue_roue_droite) / 2;     // on constate avec un raisonmment physique que la distance parcourue par le ce,tre du robot est la moitiÃ© de la somme de celles parcourues par chacunes de ses roues
-    m_angle = m_angle + 180/PI*atan((distance_parcourue_roue_gauche - distance_parcourue_roue_droite) / (2 * m_empattement));             // cf simple calme d'angles dans un triangle + ajout de la fonction arctan ðŸ™‚
-    m_angle = modulo180(m_angle); // permet d'avoir un angle entre -180 et +180°
-    m_posX += distance_parcourue * cos(PI/180*m_angle);
-    m_posY += distance_parcourue * sin(PI/180*m_angle);
-  }
-  //#endif
-  /*#ifdef SOURIS
-  m_sourisGauche->actualiserPosition();
-  m_sourisDroite->actualiserPosition();
+  */
+      //#ifdef CODEURS
+      double encodeurGauche = m_roueGauche->getCodeur();
+      double encodeurDroit = m_roueDroite->getCodeur();
+      int nbPasEncodeurGauche = encodeurGauche - m_encodeurPrecedentGauche;
+      int nbPasEncodeurDroit = encodeurDroit - m_encodeurPrecedentDroit;
+      m_encodeurPrecedentGauche = encodeurGauche;
+      m_encodeurPrecedentDroit = encodeurDroit;
 
-  float x1=m_sourisGauche->getpositionX();//récupération de l'abscisse de la souris 1 dans son repère (celui de référence par convention).
-  float y1=m_sourisGauche->getpositionY();//récupération de l'ordonnée de la souris 1 dans son repère (celui de référence par convention).
+      //Pour évite les gros bugs non physiques
+      if (abs(nbPasEncodeurGauche) + abs(nbPasEncodeurDroit) < 3000)
+      {
+        //dans un intervalle de temps :
+        double distance_parcourue_roue_gauche = nbPasEncodeurGauche * 2 * PI * m_rayon / m_roueGauche->getReducteur(); //il faut surement rajouter le rapport de rÃ©duction du moteur                       // ici on calcule la distance parcourue. Pour cela, on estime que le temps d'exÃ©cution de l'algo est faible, et le seul facteur limitant est
+        double distance_parcourue_roue_droite = nbPasEncodeurDroit * 2 * PI * m_rayon / m_roueDroite->getReducteur();
+        double distance_parcourue = (distance_parcourue_roue_gauche + distance_parcourue_roue_droite) / 2;     // on constate avec un raisonmment physique que la distance parcourue par le ce,tre du robot est la moitiÃ© de la somme de celles parcourues par chacunes de ses roues
+        m_angle = m_angle - 180/PI*atan((distance_parcourue_roue_gauche - distance_parcourue_roue_droite) / (2 * m_empattement));             // cf simple calme d'angles dans un triangle + ajout de la fonction arctan ðŸ™‚
+        m_angle = modulo180(m_angle); // permet d'avoir un angle entre -180 et +180°
+        m_posX += distance_parcourue * cos(PI/180*m_angle);
+        m_posY += distance_parcourue * sin(PI/180*m_angle);
+      }
+      //#endif
+      /*#ifdef SOURIS
+      m_sourisGauche->actualiserPosition();
+      m_sourisDroite->actualiserPosition();
 
-  float X2=m_sourisDroite->getpositionX();//récupération de l'abscisse de la souris 2 dans son repère.
-  float X2=m_sourisDroite->getpositionY();//récupération de l'abscisse de la souris 2 dans son repère.
+      float x1=m_sourisGauche->getpositionX();//récupération de l'abscisse de la souris 1 dans son repère (celui de référence par convention).
+      float y1=m_sourisGauche->getpositionY();//récupération de l'ordonnée de la souris 1 dans son repère (celui de référence par convention).
 
-  float x2=X2*cos(m_angleInterSouris)-Y2*sin(m_angleInterSouris); //calcul des coordonées de la souris 2 dans le repère de la souris 1.
-  float y2=X2*sin(m_angleInterSouris)+Y2*cos(m_angleInterSouris);
+      float X2=m_sourisDroite->getpositionX();//récupération de l'abscisse de la souris 2 dans son repère.
+      float X2=m_sourisDroite->getpositionY();//récupération de l'abscisse de la souris 2 dans son repère.
 
-  m_posX+=(x1+x2)/2; // calcul de la position du centre du robot /!\ On considère sue le centre du robot est le milieu du segment reliant les deux souris
-  m_posY+=(y1+y2)/2;
-  if(x2==x1){
-      m_angle=(2*(y2>y1)-1)*(PI/2);
-  }
-  else {
-      m_angle=atan((y2-y1)/(x2-x1)); //calcul de la position angulaire du robot.
-  }
-  #endif
-*/
+      float x2=X2*cos(m_angleInterSouris)-Y2*sin(m_angleInterSouris); //calcul des coordonées de la souris 2 dans le repère de la souris 1.
+      float y2=X2*sin(m_angleInterSouris)+Y2*cos(m_angleInterSouris);
+
+      m_posX+=(x1+x2)/2; // calcul de la position du centre du robot /!\ On considère sue le centre du robot est le milieu du segment reliant les deux souris
+      m_posY+=(y1+y2)/2;
+      if(x2==x1){
+          m_angle=(2*(y2>y1)-1)*(PI/2);
+      }
+      else {
+          m_angle=atan((y2-y1)/(x2-x1)); //calcul de la position angulaire du robot.
+      }
+      #endif
+    */
 }
-
 
 bool Robot::tournerPrecis(float theta, float precision) // le robot vise l'angle theta en radians
 {
+  m_vitesseMoyenne = 0; // pour éviter qu'il aille lentement !
   m_modeSvrPt= false;
   m_consigneAngle = modulo180(theta);
   correctionAngle.Compute();
@@ -621,13 +732,26 @@ bool Robot::tournerPrecis(float theta, float precision) // le robot vise l'angle
     return true;
   }
   digitalWrite(ledEtapeFinie, LOW);
-  Robot::avancerTourner(0, -m_vitesseRotation);
+  Robot::avancerTourner(0, m_vitesseRotation);
   return false;
+}
+
+bool Robot::suivrePoint(float *coordonnees, float precision)
+{
+    return suivrePoint(coordonnees[0],coordonnees[1],precision);
 }
 
 bool Robot::suivrePoint(float xCible, float yCible, float precision)
 {
   m_modeSvrPt = true;
+/*
+  Serial.begin(BAUDRATE);
+  Serial.print("xCible :");
+  Serial.print(xCible);
+  Serial.print("\t yCible :");
+  Serial.print(yCible);
+  Serial.print("\t");
+
   /*
   int diff = millis() - m_lastTime;
   if (diff > 3*m_periode)  m_lastTime = millis() - m_periode;
@@ -642,19 +766,18 @@ bool Robot::suivrePoint(float xCible, float yCible, float precision)
 
           m_consigneAngleSvrPt = 180/PI*atan((yCible - m_posY) / (xCible - m_posX));
           if(abs(modulo180(m_angle-m_consigneAngleSvrPt))>90) m_consigneAngleSvrPt=modulo180(180+m_consigneAngleSvrPt);
-          m_angleComputedSvrPt = correctionAngleSvrPt.Compute();
 
-          m_lastTime +=m_periode;
+          //m_lastTime +=m_periode;
   }
   else
   {
-      m_angleComputedSvrPt = false;
       m_distanceComputed = false;
   }
   if (abs(m_distance) >= precision) //vérifier que abs fonctionne tout le temps avec un float !
   {
       digitalWrite(ledEtapeFinie, LOW);
-      Robot::avancerTourner((m_vitesseMoyenne / (1 + abs(m_vitesseRotationSvrPt)*m_rapportAvancerTourner)), -m_vitesseRotationSvrPt);
+      Serial.begin(BAUDRATE);
+      Robot::avancerTourner((m_vitesseMoyenne / (1 + abs(m_vitesseRotationSvrPt)*m_rapportAvancerTourner)), m_vitesseRotationSvrPt);
       return false;
   }
   else
@@ -668,9 +791,11 @@ bool Robot::suivrePoint(float xCible, float yCible, float precision)
 
 void Robot::avancerTourner(float v, float theta)
 {
+
   theta = constrain(theta, -150, 150);
-  v = constrain(v, -150 + abs(theta), 150 - abs(theta));
+  v = constrain(v, -m_vitesseMoyenneMax + abs(theta), m_vitesseMoyenneMax - abs(theta));
   //#if PONT_EN_H
+
   avancer(v-theta,v+theta);
   //#endif
 
@@ -690,11 +815,19 @@ void Robot::avancerTourner(float v, float theta)
 
 void Robot::avancer(float vg, float vd)
 {
+    /*Serial.begin(BAUDRATE); //debug
+    Serial.print(vg);
+    Serial.print(" ");
+    Serial.print(vd);
+    Serial.print(" ");
+    */
+    float acc = m_acc;
+    if (m_vitesseMoyenne <0 ) acc /=40;
     if (m_vg*vg<0) m_vg =0;
-    else if (abs(m_vg)<abs(vg)) m_vg = constrain(vg,m_vg-m_acc,m_vg+m_acc);
+    else if (abs(m_vg)<abs(vg)) m_vg = constrain(vg,m_vg-acc,m_vg+acc);
     else m_vg = vg;
     if (m_vd*vd<0) m_vd =0;
-    else if (abs(m_vd)<abs(vd)) m_vd = constrain(vd,m_vd-m_acc,m_vd+m_acc);
+    else if (abs(m_vd)<abs(vd)) m_vd = constrain(vd,m_vd-acc,m_vd+acc);
     else m_vd = vd;
     //m_vg = vg;
     //m_vd = vd;
@@ -732,11 +865,6 @@ void Robot::setRapportAvancerTourner(float r)
     m_rapportAvancerTourner = r;
 }
 
-float Robot::getRapportAvancerTourner()
-{
-    return m_rapportAvancerTourner;
-}
-
 void Robot::setAngleCorrecteur(float kp, float ki, float kd)
 {
     correctionAngle.SetTunings(kp,ki,kd);
@@ -752,7 +880,7 @@ void Robot::setAngleSvrPtCorrecteur(float kp, float ki, float kd)
     correctionAngleSvrPt.SetTunings(kp,ki,kd);
 }
 
-float Robot::modulo180(float angle) //retourne un angle entre -180 et 180°
+double Robot::modulo360(double angle) //retourne un angle entre -180 et 180°
 {
   return angle - 360 * floor((angle + 180) / 360);
 }
@@ -790,6 +918,12 @@ void Robot::setIntegralSaturation(float sat)
     correctionDistance.SetIntegralSaturation(sat);
 }
 
+void Robot::setCoordonneesEvitement(float x, float y, float angle)
+{
+    coordonneesEvitement[0]=x;
+    coordonneesEvitement[1]=y;
+    coordonneesEvitement[2]=angle;
+}
 void Robot::setCoordonneesBluenium(float x, float y, float angle)
 {
     coordonneesBluenium[0]=x;
@@ -824,4 +958,20 @@ void Robot::setAcceleration(float acc)
 void Robot::initTime()
 {
     tInit = millis();
+}
+
+float Robot::getVg()
+{
+    return m_vg;
+}
+
+float Robot::getVd()
+{
+    return m_vd;
+}
+
+void Robot::setModeAveugle(bool mode)
+{
+    m_aveugle = mode;
+    digitalWrite(ledJaune,mode);
 }
